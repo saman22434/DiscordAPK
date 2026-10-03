@@ -1,3 +1,4 @@
+
 name: Build APK
 
 on:
@@ -74,7 +75,42 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      - name: Configure Android API
+        run: |
+          cd "$PROJECT_DIR"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("buildozer.spec")
+          lines = path.read_text(encoding="utf-8").splitlines()
+
+          key = "android.minapi"
+          found = False
+
+          for i, line in enumerate(lines):
+              stripped = line.strip()
+
+              if stripped.startswith(key + " ="):
+                  lines[i] = f"{key} = 24"
+                  found = True
+                  break
+
+          if not found:
+              lines.append(f"{key} = 24")
+
+          path.write_text(
+              "\n".join(lines) + "\n",
+              encoding="utf-8"
+          )
+
+          print("Android minimum API configured to 24")
+          PY
+
+          grep -n "android.minapi" buildozer.spec
+
       - name: Build APK with full error log
+        shell: bash
         run: |
           cd "$PROJECT_DIR"
 
@@ -82,9 +118,10 @@ jobs:
           echo "BUILDING APK"
           echo "========================================"
 
+          set +e
           buildozer -v android debug 2>&1 | tee build.log
-
           BUILD_EXIT=${PIPESTATUS[0]}
+          set -e
 
           echo ""
           echo "========================================"
@@ -118,3 +155,11 @@ jobs:
           name: DiscordAPK
           path: "project/**/bin/*.apk"
           if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscordAPK-Build-Log
+          path: "project/**/build.log"
+          if-no-files-found: ignore
