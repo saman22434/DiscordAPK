@@ -7,9 +7,13 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
@@ -57,26 +61,23 @@ jobs:
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer cython
+          python -m pip install buildozer cython==0.29.37
 
-      - name: Find Buildozer project
+      - name: Find and configure project
+        shell: bash
         run: |
+          set -e
+
           SPEC=$(find project -name "buildozer.spec" -type f | head -n 1)
 
           if [ -z "$SPEC" ]; then
-            echo "ERROR: buildozer.spec was not found inside the ZIP."
+            echo "ERROR: buildozer.spec not found"
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$SPEC")
-
-          echo "Found: $SPEC"
-          echo "Project directory: $PROJECT_DIR"
-
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Configure Android API
-        run: |
           cd "$PROJECT_DIR"
 
           python - <<'PY'
@@ -85,81 +86,70 @@ jobs:
           path = Path("buildozer.spec")
           lines = path.read_text(encoding="utf-8").splitlines()
 
-          key = "android.minapi"
-          found = False
+          updates = {
+              "requirements": "python3,kivy,discord.py,aiohttp==3.12.15",
+              "android.minapi": "24",
+              "android.api": "35",
+              "android.archs": "arm64-v8a",
+          }
 
-          for i, line in enumerate(lines):
-              stripped = line.strip()
-
-              if stripped.startswith(key + " ="):
-                  lines[i] = f"{key} = 24"
-                  found = True
-                  break
-
-          if not found:
-              lines.append(f"{key} = 24")
+          for key, value in updates.items():
+              prefix = key + " ="
+              for i, line in enumerate(lines):
+                  if line.strip().startswith(prefix):
+                      lines[i] = f"{key} = {value}"
+                      break
+              else:
+                  lines.append(f"{key} = {value}")
 
           path.write_text(
               "\n".join(lines) + "\n",
               encoding="utf-8"
           )
 
-          print("Android minimum API configured to 24")
+          print("Project configuration updated:")
+          for key, value in updates.items():
+              print(f"{key} = {value}")
           PY
 
-          grep -n "android.minapi" buildozer.spec
+          cat buildozer.spec
 
-      - name: Build APK with full error log
+      - name: Build APK
         shell: bash
         run: |
           cd "$PROJECT_DIR"
-
-          echo "========================================"
-          echo "BUILDING APK"
-          echo "========================================"
 
           set +e
           buildozer -v android debug 2>&1 | tee build.log
           BUILD_EXIT=${PIPESTATUS[0]}
           set -e
 
-          echo ""
-          echo "========================================"
-          echo "BUILD EXIT CODE: $BUILD_EXIT"
-          echo "========================================"
-
           if [ "$BUILD_EXIT" -ne 0 ]; then
-            echo ""
-            echo "========================================"
-            echo "POSSIBLE ERROR LINES"
-            echo "========================================"
-
+            echo "BUILD FAILED"
+            echo "Relevant errors:"
             grep -i -E \
-              "error:|error |exception|failed|fatal|traceback|command failed" \
+              "error:|exception|failed|fatal|traceback|command failed" \
               build.log | tail -n 100 || true
-
-            echo ""
-            echo "========================================"
-            echo "LAST 200 LINES"
-            echo "========================================"
-
-            tail -n 200 build.log
 
             exit "$BUILD_EXIT"
           fi
+
+          echo "BUILD SUCCESSFUL"
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: DiscordAPK
-          path: "project/**/bin/*.apk"
+          path: "${{ env.PROJECT_DIR }}/bin/*.apk"
           if-no-files-found: error
+          retention-days: 14
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: DiscordAPK-Build-Log
-          path: "project/**/build.log"
+          path: "${{ env.PROJECT_DIR }}/build.log"
           if-no-files-found: ignore
+          retention-days: 14
