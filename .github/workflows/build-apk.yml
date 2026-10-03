@@ -94,6 +94,7 @@ jobs:
 
           for key, value in updates.items():
               prefix = key + " ="
+
               for i, line in enumerate(lines):
                   if line.strip().startswith(prefix):
                       lines[i] = f"{key} = {value}"
@@ -107,11 +108,24 @@ jobs:
           )
 
           print("Project configuration updated:")
+
           for key, value in updates.items():
               print(f"{key} = {value}")
           PY
 
           cat buildozer.spec
+
+      - name: Clean Buildozer Android build
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "Cleaning previous Buildozer build directories..."
+
+          rm -rf .buildozer
+          rm -rf bin
+
+          echo "Clean build environment ready."
 
       - name: Build APK
         shell: bash
@@ -119,13 +133,17 @@ jobs:
           cd "$PROJECT_DIR"
 
           set +e
+
           buildozer -v android debug 2>&1 | tee build.log
+
           BUILD_EXIT=${PIPESTATUS[0]}
+
           set -e
 
           if [ "$BUILD_EXIT" -ne 0 ]; then
             echo "BUILD FAILED"
             echo "Relevant errors:"
+
             grep -i -E \
               "error:|exception|failed|fatal|traceback|command failed" \
               build.log | tail -n 100 || true
