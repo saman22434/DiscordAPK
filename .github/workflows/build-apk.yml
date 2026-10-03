@@ -18,8 +18,6 @@ jobs:
         run: |
           mkdir -p project
           unzip -q DiscordBotAPKProject.zip -d project
-
-          echo "Extracted files:"
           find project -maxdepth 6 -type f | sort
 
       - name: Set up Python
@@ -76,12 +74,45 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-      - name: Build APK
+      - name: Build APK with full error log
         run: |
           cd "$PROJECT_DIR"
-          buildozer android debug
+
+          echo "========================================"
+          echo "BUILDING APK"
+          echo "========================================"
+
+          buildozer -v android debug 2>&1 | tee build.log
+
+          BUILD_EXIT=${PIPESTATUS[0]}
+
+          echo ""
+          echo "========================================"
+          echo "BUILD EXIT CODE: $BUILD_EXIT"
+          echo "========================================"
+
+          if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo ""
+            echo "========================================"
+            echo "POSSIBLE ERROR LINES"
+            echo "========================================"
+
+            grep -i -E \
+              "error:|error |exception|failed|fatal|traceback|command failed" \
+              build.log | tail -n 100 || true
+
+            echo ""
+            echo "========================================"
+            echo "LAST 200 LINES"
+            echo "========================================"
+
+            tail -n 200 build.log
+
+            exit "$BUILD_EXIT"
+          fi
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: DiscordAPK
