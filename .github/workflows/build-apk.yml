@@ -14,16 +14,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show project structure
+        run: |
+          echo "Current directory:"
+          pwd
+          echo ""
+          echo "Repository files:"
+          find . -maxdepth 4 -type f | sort
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Install system dependencies
         run: |
@@ -52,12 +60,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install buildozer cython
 
+      - name: Find Buildozer project
+        run: |
+          SPEC=$(find . -name "buildozer.spec" -type f | head -n 1)
+
+          if [ -z "$SPEC" ]; then
+            echo "ERROR: buildozer.spec was not found."
+            echo "Files found in repository:"
+            find . -maxdepth 6 -type f | sort
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SPEC")
+
+          echo "Found buildozer.spec at: $SPEC"
+          echo "Project directory: $PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
       - name: Build APK
         run: |
+          cd "$PROJECT_DIR"
           buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: DiscordAPK
-          path: bin/*.apk
+          path: "**/bin/*.apk"
+          if-no-files-found: error
