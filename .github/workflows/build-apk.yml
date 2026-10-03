@@ -24,7 +24,7 @@ jobs:
           unzip -q DiscordBotAPKProject.zip -d project
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
@@ -88,9 +88,8 @@ jobs:
           lines = path.read_text(encoding="utf-8").splitlines()
 
           updates = {
-              # Pin Android Python to 3.11 to avoid the Python 3.14
-              # compatibility problem seen with charset-normalizer.
-              "requirements": "python3==3.11.9,kivy,discord.py,aiohttp==3.14.3",
+              # Pin Android Python and host Python to the same version.
+              "requirements": "python3==3.11.9,hostpython3==3.11.9,kivy,discord.py,aiohttp==3.14.3",
 
               "android.minapi": "24",
               "android.api": "35",
