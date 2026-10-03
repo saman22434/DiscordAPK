@@ -53,6 +53,7 @@ jobs:
           pip install buildozer cython
 
       - name: Build APK
+        working-directory: App
         run: |
           buildozer android debug
 
@@ -60,4 +61,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DiscordAPK
-          path: bin/*.apk
+          path: App/bin/*.apk
