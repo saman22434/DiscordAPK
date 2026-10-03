@@ -22,7 +22,6 @@ jobs:
         run: |
           mkdir -p project
           unzip -q DiscordBotAPKProject.zip -d project
-          find project -maxdepth 6 -type f | sort
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,6 +37,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             git \
             zip \
@@ -76,6 +76,7 @@ jobs:
           fi
 
           PROJECT_DIR=$(dirname "$SPEC")
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
           cd "$PROJECT_DIR"
@@ -87,7 +88,10 @@ jobs:
           lines = path.read_text(encoding="utf-8").splitlines()
 
           updates = {
-              "requirements": "python3,kivy,discord.py,aiohttp",
+              # aiohttp 3.13+ supports Python 3.14.
+              # 3.14.3 also provides Android CPython 3.14 ARM64 wheels.
+              "requirements": "python3,kivy,discord.py,aiohttp==3.14.3",
+
               "android.minapi": "24",
               "android.api": "35",
               "android.archs": "arm64-v8a",
@@ -112,22 +116,25 @@ jobs:
               encoding="utf-8"
           )
 
-          print("Project configuration:")
+          print("===== Applied configuration =====")
+
           for key, value in updates.items():
               print(f"{key} = {value}")
+
+          print("=================================")
           PY
 
           echo
-          echo "===== buildozer.spec ====="
+          echo "===== Final buildozer.spec ====="
           cat buildozer.spec
-          echo "=========================="
+          echo "================================"
 
       - name: Clean Buildozer Android build
         shell: bash
         run: |
           cd "$PROJECT_DIR"
 
-          echo "Cleaning previous Buildozer build directories..."
+          echo "Cleaning Buildozer build directories..."
 
           rm -rf .buildozer
           rm -rf bin
@@ -148,20 +155,28 @@ jobs:
           set -e
 
           if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo
+            echo "=============================="
             echo "BUILD FAILED"
+            echo "=============================="
+
             echo
             echo "===== Relevant errors ====="
 
             grep -i -E \
               "error:|exception|failed|fatal|traceback|command failed" \
-              build.log | tail -n 100 || true
+              build.log | tail -n 150 || true
 
+            echo
             echo "==========================="
 
             exit "$BUILD_EXIT"
           fi
 
+          echo
+          echo "=============================="
           echo "BUILD SUCCESSFUL"
+          echo "=============================="
 
       - name: Upload APK
         if: success()
